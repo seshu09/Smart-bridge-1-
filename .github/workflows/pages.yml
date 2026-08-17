@@ -1,48 +1,175 @@
-name: Deploy to GitHub Pages
+import React, { useState } from 'react';
+import { HardDrive, Upload, FileText, Plus, Copy, Trash2 } from 'lucide-react';
 
-on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
+interface DriveDocsViewProps {
+  onImportToSummarizer: (text: string) => void;
+}
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+interface Document {
+  id: string;
+  name: string;
+  content: string;
+  createdAt: Date;
+}
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+export function DriveDocsView({ onImportToSummarizer }: DriveDocsViewProps) {
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const newDoc: Document = {
+        id: Date.now().toString(),
+        name: file.name,
+        content,
+        createdAt: new Date(),
+      };
+      setDocuments([...documents, newDoc]);
+      setSelectedDoc(newDoc);
+      setError(null);
+    };
+    reader.onerror = () => {
+      setError('Failed to read file');
+    };
+    reader.readAsText(file);
+  };
 
-      - name: Install dependencies
-        run: npm install
+  const handleImport = () => {
+    if (selectedDoc) {
+      onImportToSummarizer(selectedDoc.content);
+    }
+  };
 
-      - name: Build
-        run: npm run build
+  const handleDelete = (id: string) => {
+    const newDocs = documents.filter((doc) => doc.id !== id);
+    setDocuments(newDocs);
+    if (selectedDoc?.id === id) {
+      setSelectedDoc(newDocs[0] || null);
+    }
+  };
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
+  return (
+    <div className="min-h-[600px] bg-white rounded-xl shadow-lg p-8 border-2 border-purple-100">
+      <div className="flex items-center gap-3 mb-8">
+        <HardDrive className="w-8 h-8 text-[#7C3AED]" />
+        <h1 className="text-3xl font-bold text-[#1F2937]">Google Drive & Docs</h1>
+      </div>
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Upload Section */}
+        <div className="lg:col-span-1">
+          <div className="bg-purple-50 border-2 border-dashed border-[#7C3AED] rounded-lg p-8 text-center cursor-pointer hover:bg-purple-100 transition">
+            <label htmlFor="file-upload" className="cursor-pointer">
+              <Upload className="w-12 h-12 text-[#7C3AED] mx-auto mb-3" />
+              <p className="font-semibold text-[#1F2937] mb-1">Upload Document</p>
+              <p className="text-sm text-slate-600">Click to select a file</p>
+              <input
+                id="file-upload"
+                type="file"
+                accept=".txt,.pdf,.doc,.docx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
 
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          {/* Documents List */}
+          <div className="mt-6">
+            <h2 className="text-lg font-bold text-[#1F2937] mb-4">Documents</h2>
+            {documents.length === 0 ? (
+              <p className="text-slate-500 text-sm">No documents uploaded yet</p>
+            ) : (
+              <div className="space-y-2">
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    onClick={() => setSelectedDoc(doc)}
+                    className={`p-3 rounded-lg cursor-pointer flex items-center justify-between transition ${
+                      selectedDoc?.id === doc.id
+                        ? 'bg-[#7C3AED] text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 text-[#1F2937]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <FileText className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-sm truncate">{doc.name}</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(doc.id);
+                      }}
+                      className={`p-1 rounded hover:bg-red-100 ${
+                        selectedDoc?.id === doc.id ? 'hover:bg-red-500/30' : ''
+                      }`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Document Preview */}
+        <div className="lg:col-span-2">
+          {selectedDoc ? (
+            <div className="h-full flex flex-col">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-[#1F2937] mb-2">{selectedDoc.name}</h2>
+                <p className="text-sm text-slate-500">
+                  Uploaded on {selectedDoc.createdAt.toLocaleDateString()}
+                </p>
+              </div>
+
+              <div className="bg-slate-50 rounded-lg p-4 flex-1 overflow-y-auto mb-6 border border-slate-200">
+                <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
+                  {selectedDoc.content}
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleImport}
+                  className="flex-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Import to Summarizer
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(selectedDoc.content);
+                  }}
+                  className="bg-slate-200 hover:bg-slate-300 text-[#1F2937] font-semibold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <HardDrive className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-500 text-lg">Upload a document to get started</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
