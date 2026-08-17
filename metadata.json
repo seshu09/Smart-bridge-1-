@@ -1,0 +1,6 @@
+{
+  "name": "EduGenie",
+  "description": "Lightweight AI-powered educational assistant for question answering, concept explanations, quiz generation, summarization, roadmaps, and full Google Drive & Google Docs integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
